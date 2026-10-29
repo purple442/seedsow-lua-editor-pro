@@ -1,0 +1,8 @@
+* -text
+*.lua text eol=lf
+*.ref text eol=lf
+*.md text eol=lf
+*.dat binary
+*.bin binary
+*.asb binary
+*.png binary
