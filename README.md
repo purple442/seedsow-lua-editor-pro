@@ -5,6 +5,7 @@ Side-slot extension (`Slot 4`) for [DialingSpoon527/seedsow-lua-editor](https://
 Slots 1–3 (`ssedit1..3.lua`) stay untouched as read-only V3 recovery editors. Slot 4 boots `pro_editor.lua` (on-console GUI IDE), and Slot 9 boots `alula`'s launcher & HTTP `:8080` server on demand.
 
 ![Pro Editor v2](screenshots/pro_editor.jpg)
+![Artemis Launcher (Slot 9)](screenshots/artemis_launcher.jpg)
 ![Save Slots](screenshots/load_slots.jpg)
 
 ## Repository Layout
