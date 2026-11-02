@@ -52,7 +52,7 @@ Helper functions in `sslib.lua` (`hexdump`, `func_info`, `inspect_table`, `scan_
 
 ## Usage (JKSV)
 
-1. Download `Seedsow_Pro_v2_JKSV.zip` from **Releases** (or copy the contents of [`save/`](save/)—including `.nx_save_meta.bin`—directly into the root of your JKSV backup folder).
+1. Download `Seedsow_Pro_v2_JKSV.zip` from **Releases** directly into the root of your JKSV backup folder).
 2. Restore the save in JKSV on Switch 1, then transfer the save data to Switch 2 if needed.
 3. Load **Slot 4** in-game (or load Slot 1 and run `sscode004.lua`) to register Slots 4–9 in the Load Menu.
 
