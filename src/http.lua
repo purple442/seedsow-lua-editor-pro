@@ -27,9 +27,6 @@ local function i32(r)
 	return r
 end
 
--- core.lua parks the string in a pinned box and reads its TString* with the
--- non-destructive ROP peek: no temporary table, no header write, so the
--- collector can run between responses.
 local function data_addr(s)
 	return assert(N.str_addr(s), "httpd: no TString pointer") + TSTRING_DATA
 end
@@ -41,11 +38,12 @@ local function aligned_block(size)
 	return base - base % 0x1000
 end
 
-local socket_pool = aligned_block(0xC0000)
+local socket_pool = _G.n2h_socket_pool or aligned_block(0xC0000)
+_G.n2h_socket_pool = socket_pool
 log(string.format("[+] socket pool @ 0x%x (768 KiB)", socket_pool))
 
--- sockaddr_in at +0; socklen_t at +0x20
-local addr_block = N.alloc(0x1000)
+local addr_block = _G.n2h_addr_block or N.alloc(0x1000)
+_G.n2h_addr_block = addr_block
 assert(addr_block and addr_block ~= 0, "httpd: sockaddr allocation failed")
 local ADDR = addr_block
 local ADDRLEN = addr_block + 0x20
@@ -75,6 +73,7 @@ local function respond(code, reason, body, ctype)
 		"HTTP/1.1 %d %s\r\n" ..
 		"Content-Type: %s\r\n" ..
 		"Content-Length: %d\r\n" ..
+		"Access-Control-Allow-Origin: *\r\n" ..
 		"Connection: close\r\n" ..
 		"\r\n%s",
 		code, reason, ctype or "text/plain; charset=utf-8", #body, body)
@@ -96,7 +95,6 @@ local function query_param(query, name)
 	return nil
 end
 
--- protect certain important files from being bricked
 local protected_files = {
 	["save:/core.lua"] = true,
 	["save:/inject.iet"] = true,
@@ -151,6 +149,24 @@ local function save_target(name)
 	return path
 end
 
+local function track_custom_file(short_name)
+	local idx_path = "save:/ed004-files.txt"
+	local existing = ""
+	local rf = io.open(idx_path, "rb")
+	if rf then
+		existing = rf:read("*a") or ""
+		rf:close()
+	end
+	for line in existing:gmatch("[^\r\n]+") do
+		if line == short_name then return end
+	end
+	local wf = io.open(idx_path, "wb")
+	if wf then
+		wf:write(existing .. short_name .. "\n")
+		wf:close()
+	end
+end
+
 local function run_eval(src)
 	local captured = {}
 	local saved = print
@@ -198,6 +214,8 @@ local function run_save(name, body)
 	if not ok then
 		return nil, tostring(werr)
 	end
+	local short = path:gsub("^save:/", "")
+	pcall(track_custom_file, short)
 	if e and e.tag then
 		pcall(function() e:tag{"save", file = "ed004-commit.dat"} end)
 	end
@@ -219,26 +237,280 @@ local function run_read(name)
 end
 
 local function run_list()
-	local ok, lib = pcall(require, "sslib")
-	if ok and type(lib) == "table" and lib.list_save_files then
-		local base = (e and e.var and e:var("s.savepath")) or "save:"
-		local found = lib.list_save_files(e, base)
-		local rows = {}
-		for i, item in ipairs(found) do
-			rows[#rows + 1] = string.format("%-28s %8d bytes", item.name, item.size)
-		end
-		return table.concat(rows, "\n") .. "\n"
+	local base = (e and e.var and e:var("s.savepath")) or "save:"
+	local candidates = {
+		"pro_editor.lua", "sslib.lua",
+		"inject.lua", "inject2.lua", "http.lua", "http2.lua", "core.lua", "core2.lua",
+		"exploita.lua", "exploita2.lua", "exploitb.lua", "exploitb2.lua", "proggy.ttf",
+		"sscode004.lua", "sscode005.lua", "sscode006.lua", "sscode007.lua", "sscode008.lua", "sscode009.lua",
+		"report_engine.txt", "report_env.txt", "report_registry.txt", "report_files.txt", "report_vm.txt",
+		"files_list.txt", "crash_log.txt", "ed004-clipboard.txt", "ed004-session.txt", "ed004-files.txt",
+		"saveg.dat", "system.dat", "autosave.dat", "ssedit1.lua", "ssedit2.lua", "ssedit3.lua"
+	}
+	for i = 10, 30 do
+		candidates[#candidates + 1] = string.format("sscode%03d.lua", i)
 	end
-	return "sslib.lua not available\n"
+	local idx_f = io.open(base .. "/ed004-files.txt", "rb")
+	if idx_f then
+		local idx_data = idx_f:read("*a") or ""
+		idx_f:close()
+		for line in idx_data:gmatch("[^\r\n]+") do
+			if line ~= "" then candidates[#candidates + 1] = line end
+		end
+	end
+	local seen = {}
+	local rows = {}
+	for _, name in ipairs(candidates) do
+		if not seen[name] then
+			seen[name] = true
+			local f = io.open(base .. "/" .. name, "rb")
+			if f then
+				local size = f:seek("end") or 0
+				f:close()
+				local ro = protected_files["save:/" .. name] and "RO" or "RW"
+				rows[#rows + 1] = string.format("%s\t%d\t%s", name, size, ro)
+			end
+		end
+	end
+	return table.concat(rows, "\n") .. "\n"
 end
+
+local WEB_UI = [[<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Seedsow Switch 2 Web IDE</title>
+<style>
+*{box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+body{margin:0;background:#0b1320;color:#e6edf3;display:flex;flex-direction:column;height:100vh}
+header{background:#111d30;padding:10px 18px;border-bottom:1px solid #263859;display:flex;justify-content:space-between;align-items:center}
+header h1{margin:0;font-size:16px;color:#7ee787}
+.badge{background:#1f324d;color:#79c0ff;padding:4px 10px;border-radius:4px;font-size:12px}
+main{display:flex;flex:1;overflow:hidden}
+#sidebar{width:370px;background:#0f192a;border-right:1px solid #263859;display:flex;flex-direction:column}
+.panel-hdr{padding:10px 12px;background:#152238;font-size:13px;font-weight:bold;color:#79c0ff;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #263859}
+#filelist{flex:1;overflow-y:auto;padding:6px}
+.frow{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border-bottom:1px solid #1a273d;font-size:12px}
+.frow:hover{background:#18263e}
+.fname{color:#e6edf3;cursor:pointer;word-break:break-all;flex:1}
+.fname:hover{color:#79c0ff;text-decoration:underline}
+.fmeta{color:#8b949e;margin:0 8px;font-size:11px;white-space:nowrap}
+.ro{color:#ffa657;font-size:10px;border:1px solid #ffa657;padding:1px 4px;border-radius:3px;margin-right:4px}
+#upload-box{padding:10px;border-top:1px solid #263859;background:#111d30;font-size:12px}
+#workspace{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.toolbar{padding:8px 12px;background:#152238;border-bottom:1px solid #263859;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button{background:#1f6feb;color:#fff;border:none;padding:5px 11px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600}
+button:hover{background:#388bfd}
+button.sec{background:#21262d;border:1px solid #30363d;color:#c9d1d9}
+button.sec:hover{background:#30363d}
+button.run{background:#238636}
+button.run:hover{background:#2ea043}
+button.del{background:#da3633;padding:2px 6px;font-size:11px}
+input[type=text]{background:#0b1320;color:#e6edf3;border:1px solid #30363d;padding:5px 8px;border-radius:4px;font-size:12px}
+#editor{flex:1;background:#0b1320;color:#e6edf3;border:none;padding:12px;font-size:13px;line-height:1.45;resize:none;outline:none}
+#console-wrap{height:230px;border-top:1px solid #263859;display:flex;flex-direction:column;background:#070c14}
+#output{flex:1;margin:0;padding:10px 12px;overflow-y:auto;font-size:12px;color:#7ee787;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<header>
+  <h1>Seedsow Pro v2 + switch-artemis-launcher Web IDE</h1>
+  <div>
+    <button class="sec" onclick="genReports()">1-Click Generate Switch 2 Reports</button>
+    <span class="badge" id="status">Connected</span>
+  </div>
+</header>
+<main>
+  <div id="sidebar">
+    <div class="panel-hdr">
+      <span>save:/ Files</span>
+      <button class="sec" onclick="loadFiles()">Refresh</button>
+    </div>
+    <div id="filelist">Loading...</div>
+    <div id="upload-box">
+      <div style="margin-bottom:6px;color:#79c0ff;font-weight:bold">Upload Local File to save:/</div>
+      <input type="file" id="upfile" style="width:100%;margin-bottom:6px" onchange="syncUpName()">
+      <div style="display:flex;gap:6px">
+        <input type="text" id="upname" placeholder="filename (e.g. test.lua)" style="flex:1">
+        <button onclick="uploadFile()">Upload</button>
+      </div>
+    </div>
+  </div>
+  <div id="workspace">
+    <div class="toolbar">
+      <span style="font-size:12px;color:#8b949e">File:</span>
+      <input type="text" id="curfile" value="scratch.lua" style="width:200px">
+      <button onclick="saveCurrent()">Save to save:/ (Ctrl+S)</button>
+      <button class="run" onclick="evalCurrent()">Run in Lua VM (Ctrl+Enter)</button>
+      <button class="sec" onclick="quickInfo()">VM & Engine Info</button>
+      <button class="sec" onclick="clearConsole()">Clear Output</button>
+    </div>
+    <textarea id="editor" spellcheck="false">-- Type Lua code here and press Ctrl+Enter to execute on Switch 2!
+print("Lua VM:", _VERSION, "RAM:", math.floor(collectgarbage("count")) .. " KiB")
+print("Save path:", e:var("s.savepath"))
+</textarea>
+    <div id="console-wrap">
+      <div class="panel-hdr">
+        <span>Remote /eval Output</span>
+        <span style="font-size:11px;color:#8b949e">Max payload: 28 KB</span>
+      </div>
+      <pre id="output">Ready.</pre>
+    </div>
+  </div>
+</main>
+<script>
+const out = document.getElementById('output');
+const ed = document.getElementById('editor');
+const cur = document.getElementById('curfile');
+const st = document.getElementById('status');
+
+function logOut(msg) { out.textContent = msg; }
+
+async function loadFiles() {
+  try {
+    const r = await fetch('/list');
+    const t = await r.text();
+    const box = document.getElementById('filelist');
+    box.innerHTML = '';
+    t.trim().split('\n').forEach(line => {
+      if (!line) return;
+      const [name, size, mode] = line.split('\t');
+      const div = document.createElement('div');
+      div.className = 'frow';
+      const roBadge = mode === 'RO' ? '<span class="ro">RO</span>' : '';
+      const delBtn = mode === 'RW' ? `<button class="del" onclick="delFile('${name}')">X</button>` : '';
+      div.innerHTML = `<span class="fname" onclick="openFile('${name}')">${name}</span>
+        <span class="fmeta">${roBadge}${size || '?'} B</span>
+        <a href="/read?path=save:/${encodeURIComponent(name)}" download="${name}" style="color:#79c0ff;text-decoration:none;margin-right:6px;font-size:11px">DL</a>${delBtn}`;
+      box.appendChild(div);
+    });
+  } catch (e) { logOut('List error: ' + e); }
+}
+
+async function openFile(name) {
+  st.textContent = 'Reading ' + name + '...';
+  try {
+    const r = await fetch('/read?path=save:/' + encodeURIComponent(name));
+    if (!r.ok) { logOut(await r.text()); return; }
+    const buf = await r.text();
+    cur.value = name;
+    ed.value = buf;
+    st.textContent = 'Opened ' + name + ' (' + buf.length + ' B)';
+  } catch (e) { logOut('Read error: ' + e); }
+}
+
+async function saveCurrent() {
+  const name = cur.value.trim();
+  if (!name) return;
+  st.textContent = 'Saving ' + name + '...';
+  const r = await fetch('/save?path=save:/' + encodeURIComponent(name), {method:'PUT', body: ed.value});
+  const t = await r.text();
+  logOut(t);
+  st.textContent = r.ok ? 'Saved ' + name : 'Save Error';
+  loadFiles();
+}
+
+async function evalCurrent() {
+  st.textContent = 'Running...';
+  try {
+    const r = await fetch('/eval', {method:'POST', body: ed.value});
+    logOut(await r.text());
+    st.textContent = 'Connected';
+  } catch (e) { logOut('Eval error: ' + e); }
+}
+
+async function delFile(name) {
+  if (!confirm('Delete save:/' + name + '?')) return;
+  const r = await fetch('/delete?path=save:/' + encodeURIComponent(name), {method:'DELETE'});
+  logOut(await r.text());
+  loadFiles();
+}
+
+function syncUpName() {
+  const f = document.getElementById('upfile').files[0];
+  if (f) document.getElementById('upname').value = f.name;
+}
+
+async function uploadFile() {
+  const f = document.getElementById('upfile').files[0];
+  const name = document.getElementById('upname').value.trim();
+  if (!f || !name) return alert('Choose a file and target filename');
+  const buf = await f.arrayBuffer();
+  const r = await fetch('/save?path=save:/' + encodeURIComponent(name), {method:'PUT', body: buf});
+  logOut(await r.text());
+  loadFiles();
+}
+
+async function genReports() {
+  st.textContent = 'Scanning runtime...';
+  const code = `local lib = require("sslib")
+local base = e:var("s.savepath")
+local function write_f(n, d) local f=io.open(base.."/"..n,"wb"); if f then f:write(d); f:close() end end
+write_f("report_env.txt", lib.scan_globals())
+write_f("report_engine.txt", lib.scan_engine(e))
+write_f("report_registry.txt", lib.scan_registry())
+e:tag{"save", file="ed004-commit.dat"}
+print("Generated report_env.txt, report_engine.txt, and report_registry.txt! Click them in the sidebar to view or download.")`;
+  const r = await fetch('/eval', {method:'POST', body: code});
+  logOut(await r.text());
+  st.textContent = 'Reports Ready';
+  loadFiles();
+}
+
+async function quickInfo() {
+  const code = `print("Lua:", _VERSION, "RAM KiB:", collectgarbage("count"))
+for _, k in ipairs({"s.savepath","s.scriptpath","s.systempath"}) do
+  local ok, v = pcall(function() return e:var(k) end)
+  print(k, "=", ok and v or "ERR")
+end
+if type(_G.n2h) == "table" then
+  local t = {}; for k in pairs(_G.n2h) do t[#t+1]=k end; table.sort(t)
+  print("_G.n2h:", table.concat(t, ", "))
+end`;
+  const r = await fetch('/eval', {method:'POST', body: code});
+  logOut(await r.text());
+}
+
+function clearConsole() {
+  out.textContent = '';
+  fetch('/eval', {method:'POST', body:'if _G.n2h_clear then _G.n2h_clear() end'});
+}
+
+ed.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = ed.selectionStart, end = ed.selectionEnd;
+    ed.value = ed.value.substring(0, s) + '\t' + ed.value.substring(end);
+    ed.selectionStart = ed.selectionEnd = s + 1;
+  } else if (e.ctrlKey && e.key === 'Enter') {
+    e.preventDefault(); evalCurrent();
+  } else if (e.ctrlKey && (e.key === 's' || e.key === 'S')) {
+    e.preventDefault(); saveCurrent();
+  }
+});
+
+loadFiles();
+</script>
+</body>
+</html>
+]]
 
 local function handle(method, target, body)
 	local path, query = target:match("^([^?]*)(.*)$")
 	query = query:gsub("^%?", "")
 
-	if method == "GET" and (path == "/" or path == "/status") then
+	if method == "GET" and (path == "/" or path == "/ui") then
+		return respond(200, "OK", WEB_UI, "text/html; charset=utf-8")
+	end
+
+	if method == "GET" and path == "/favicon.ico" then
+		return respond(204, "No Content", "")
+	end
+
+	if method == "GET" and path == "/status" then
 		return respond(200, "OK", string.format(
 			"seedsow-lua-editor-pro + switch-artemis-launcher HTTP server\n" ..
+			"GET  / (Browser Web IDE)\n" ..
 			"POST /eval body=<lua>\n" ..
 			"GET  /list\n" ..
 			"GET  /read?path=save:/<name>\n" ..
@@ -256,7 +528,7 @@ local function handle(method, target, body)
 		if not data then
 			return respond(404, "Not Found", "read failed: " .. tostring(why) .. "\n")
 		end
-		return respond(200, "OK", data, "application/octet-stream")
+		return respond(200, "OK", data, "text/plain; charset=utf-8")
 	end
 
 	if path == "/eval" then
@@ -421,8 +693,8 @@ local function post_init()
 
 	st.lfd = fd
 	st.phase = "accept"
-	log(string.format("HTTP server listening on http://CONSOLE_IP:%d", PORT))
-	log("Endpoints: POST /eval | GET /list | GET /read?path=save:/... | PUT /save?path=save:/...")
+	log(string.format("Web IDE & HTTP server listening on http://CONSOLE_IP:%d", PORT))
+	log("Open http://CONSOLE_IP:8080 in your PC browser! (Press B on controller to stop server)")
 end
 
 local function pump_accept()
@@ -500,6 +772,23 @@ local function pump_send()
 end
 
 function n2h_http_frame()
+	if e and e.isDownEdge and e:isDownEdge(27) then
+		close_client()
+		if st.lfd >= 0 then
+			N.call_deep(N.sdk("socket_close"), st.lfd, 0, 0, 0)
+			st.lfd = -1
+		end
+		st.phase = "dead"
+		if _G.n2h_clear then
+			pcall(_G.n2h_clear)
+		end
+		if e:isFileExists("save:/inject2.lua") then
+			e:include("save:/inject2.lua")
+		else
+			e:include("save:/inject.lua")
+		end
+		return
+	end
 	if st.phase == "accept" then
 		pump_accept()
 	elseif st.phase == "recv" then

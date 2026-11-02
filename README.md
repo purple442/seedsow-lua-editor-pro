@@ -1,19 +1,20 @@
 # seedsow-lua-editor-pro
 
-Side-slot extension (`Slot 4`) for [DialingSpoon527/seedsow-lua-editor](https://github.com/DialingSpoon527/seedsow-lua-editor) + integrated [alula/switch-artemis-launcher](https://github.com/alula/switch-artemis-launcher) (`Slot 9`) on *Seedsow Lullaby Demo* (`010042d022aea000`, Switch / Switch 2).
+Side-slot extension (`Slot 4`) for [DialingSpoon527/seedsow-lua-editor](https://github.com/DialingSpoon527/seedsow-lua-editor) + integrated [alula/switch-artemis-launcher](https://github.com/alula/switch-artemis-launcher) (`Slot 9`) with a built-in Browser Web IDE on *Seedsow Lullaby Demo* (`010042d022aea000`, Switch / Switch 2).
 
 Slots 1–3 (`ssedit1..3.lua`) stay untouched as read-only V3 recovery editors. Slot 4 boots `pro_editor.lua` (on-console GUI IDE), and Slot 9 boots `alula`'s launcher & HTTP `:8080` server on demand.
 
 ![Pro Editor v2](screenshots/pro_editor.jpg)
+![Browser Web IDE (:8080)](screenshots/web_ide.png)
 ![Artemis Launcher (Slot 9)](screenshots/artemis_launcher.jpg)
 ![Save Slots](screenshots/load_slots.jpg)
 
 ## Repository Layout
 
-- [`src/`](src/) — Lua source files for Pro Editor v2 (`pro_editor.lua`), shared helper library (`sslib.lua`), research slots (`sscode004.lua`–`sscode009.lua`), and integrated launcher/HTTP scripts (`inject.lua`, `http.lua`).
+- [`src/`](src/) — Lua source files for Pro Editor v2 (`pro_editor.lua`), shared helper library (`sslib.lua`), research slots (`sscode004.lua`–`sscode009.lua`), and launcher/Web IDE scripts (`inject.lua`, `http.lua`).
 - [`save/`](save/) — Complete JKSV save directory containing the base V3 save files, Pro Editor v2, research slots, and `switch-artemis-launcher`.
 
-## Added Features
+## Features
 
 - **5th toolbar row (`pro_editor.lua`):**
   - `Files / List` — lists files in `s.savepath` with sizes and R/O status (`files_list.txt`).
@@ -21,17 +22,18 @@ Slots 1–3 (`ssedit1..3.lua`) stay untouched as read-only V3 recovery editors. 
   - `Copy line` / `Paste clip` — persistent clipboard (`ed004-clipboard.txt`).
   - `Snippet +` — cycles through 6 starter Lua/Artemis templates.
   - `Env Inspect` — dumps `_G`, `engine` (`Luaponte` metatable + upvalues), and `debug.getregistry()` to `report_*.txt` and opens them in the editor.
-- **Scrollable console:** 200-line `print()` buffer (use D-Pad Up/Down while a script is running).
+- **Scrollable console:** 200-line `print()` buffer (D-Pad Up/Down while a script is running).
 - **Crash logging:** `xpcall` + `debug.traceback` writes full stacktraces with line numbers to `crash_log.txt`.
 - **Editor tweaks:** Live Lua RAM counter, hex offset + `[XX]` cursor highlight in HEX mode, 40-step undo.
-- **Integrated `switch-artemis-launcher` & HTTP Server (`Slot 9`):**
-  - Launch `sscode009.lua` (Slot 9) to enter `alula`'s launcher (`Y` starts the HTTP server on port `8080`, `X` returns to **Pro Editor v2**).
-  - Added `GET /list` and `GET /read?path=save:/<file>` endpoints to `http.lua` alongside `POST /eval`, `PUT /save`, and `DELETE /delete`:
+- **Slot 9 (`switch-artemis-launcher` + Browser Web IDE on `:8080`):**
+  - Launch `sscode009.lua` (Slot 9): press `Y` to start the HTTP server on port `8080`, `B` to stop the HTTP server and return to the launcher, or `X` to return to **Pro Editor v2**.
+  - **Browser Web IDE (`GET /`):** Open `http://CONSOLE_IP:8080` in any PC/phone browser to browse `save:/` files, view/edit/save scripts (`Ctrl+S`), upload/download files, run code live via `/eval` (`Ctrl+Enter`), and generate Switch 2 runtime reports with 1 click.
+  - **CLI / `curl` endpoints:**
     ```bash
     curl http://CONSOLE_IP:8080/list
     curl "http://CONSOLE_IP:8080/read?path=save:/report_engine.txt" -o report_engine.txt
     curl -X POST http://CONSOLE_IP:8080/eval -d 'print("hello")'
-    curl -X PUT --data-binary @script.lua "http://CONSOLE_IP:8080/save?path=save:/sscode010.lua"
+    curl -H "Expect:" -X PUT --data-binary @script.lua "http://CONSOLE_IP:8080/save?path=save:/sscode010.lua"
     ```
 
 ## Slots
@@ -44,7 +46,7 @@ Slots 1–3 (`ssedit1..3.lua`) stay untouched as read-only V3 recovery editors. 
 | 6 | `sscode006.lua` | Save directory file sizes, headers, and Adler32 scan (`report_files.txt`) |
 | 7 | `sscode007.lua` | Lua VM, `debug`, and `pluto` check (`report_vm.txt`) |
 | 8 | `sscode008.lua` | Fullscreen test loop with live hexdump |
-| 9 | `sscode009.lua` | Boots `switch-artemis-launcher` (`Y`: HTTP `:8080`, `X`: back to Pro Editor) |
+| 9 | `sscode009.lua` | Boots `switch-artemis-launcher` (`Y`: Web IDE `:8080`, `X`: back to Pro Editor) |
 
 Helper functions in `sslib.lua` (`hexdump`, `func_info`, `inspect_table`, `scan_globals`, `scan_engine`, `scan_registry`, `list_save_files`) can be loaded in any script with `local lib = require("sslib")`.
 

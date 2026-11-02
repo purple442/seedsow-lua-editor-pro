@@ -57,6 +57,10 @@ local function init_console()
 	for _, id in ipairs({"zzlogn", "zzamask", "startmask", "500", "600", "2", "zzzzsseditor", "zzzzssprogram", "zzzzn2hbg"}) do
 		pcall(function() e:tag{"lydel", id = id} end)
 	end
+	pcall(function() e:tag{"lyprop", id = "~debug_mw", visible = "0"} end)
+	for i = 1, (_G.n2h_msg_gen or 1) + 4 do
+		pcall(function() e:tag{"lyprop", id = "~n2h_msg_" .. i, visible = "0"} end)
+	end
 	if _G.n2h_last_msg then
 		pcall(function() e:tag{"lyprop", id = "~" .. _G.n2h_last_msg, visible = "0"} end)
 	end
