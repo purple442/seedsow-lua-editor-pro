@@ -188,8 +188,9 @@ function M.list_save_files(e, base)
         'ssedit-session.txt', 'ssedit-controls.txt', 'ssedit-input-report.txt', 'ssedit-transfer-report.txt',
         'saveg.dat', 'system.dat', 'autosave.dat',
         'save0001.dat', 'save0002.dat', 'save0003.dat', 'save0004.dat', 'save0005.dat',
-        'save0006.dat', 'save0007.dat', 'save0008.dat', 'save0121.dat',
-        'sed01.asb', 'sed02.asb', 'sed03.asb', 'ss004.asb', 'ss005.asb', 'ss006.asb', 'ss007.asb', 'ss008.asb',
+        'save0006.dat', 'save0007.dat', 'save0008.dat', 'save0009.dat', 'save0121.dat',
+        'sed01.asb', 'sed02.asb', 'sed03.asb', 'ss004.asb', 'ss005.asb', 'ss006.asb', 'ss007.asb', 'ss008.asb', 'ss009.asb',
+        'core.lua', 'http.lua', 'inject.lua', 'exploita.lua', 'proggy.ttf',
         'ssedit1.lua', 'ssedit2.lua', 'ssedit3.lua'
     }
     -- Add user slots 9..30 if present

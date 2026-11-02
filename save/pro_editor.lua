@@ -9,7 +9,7 @@ function W.protected(name)
     if not W.valid(name) then return true end
     local n=name:lower()
     if W.private_prefix and n:sub(1,#W.private_prefix)==W.private_prefix then return true end
-    if n=='saveg.dat' or n:match('^save000[123][%.]') then return true end
+    if n=='saveg.dat' or n=='core.lua' or n=='http.lua' or n=='inject.lua' or n=='proggy.ttf' or n:match('^save000[123][%.]') then return true end
     for _,prefix in ipairs({'ssedit','ssseed','ssboot','ssethumb','sed01.','sed02.','sed03.'}) do
         if n:sub(1,#prefix)==prefix then return true end
     end
@@ -436,7 +436,8 @@ local SLOT_TITLES = {
     [5] = 'RES 5: ENV & LUAPONTE INSPECT',
     [6] = 'RES 6: SAVE & PATH ANALYZER',
     [7] = 'RES 7: LUA VM & DEBUG DIAG',
-    [8] = 'RES 8: RESEARCH SCRATCHPAD'
+    [8] = 'RES 8: RESEARCH SCRATCHPAD',
+    [9] = 'RES 9: ALULA LAUNCHER + HTTP :8080'
 }
 local function register(slot,title)
     sys.saveslot=sys.saveslot or {}
